@@ -89,9 +89,9 @@ class LBFGSOptimizer(Optimizer):
         assert self.option['hessian_inverse_init'] in ('BB', 'Identity', 'Custom'), \
             'option for hessian_inverse_init can only be \'BB\', \'Identity\' or \'Custom\''
 
-    def __init__(self, option=None):
+    def __init__(self, **option):
 
-        super(LBFGSOptimizer, self).__init__(option=option)
+        super(LBFGSOptimizer, self).__init__(**option)
 
         self.sy_pairs = None
 
