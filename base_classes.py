@@ -121,7 +121,7 @@ class ObjFun:
             self.value_evaluation_time_elapsed += time.time() - start_time
             return value
         elif order == 1:  # return gradient
-            gradient = self.gradient(x_var)
+            gradient = np.asarray(self.gradient(x_var), dtype=np.float64)
             self.gradient_evaluation_times += 1
             self.gradient_evaluation_time_elapsed += time.time() - start_time
             return gradient
