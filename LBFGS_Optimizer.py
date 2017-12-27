@@ -3,7 +3,7 @@ from base_classes import *
 from collections import deque
 
 
-class LBFGSOptimizer:
+class LBFGSOptimizer(Optimizer):
     default_option = {'max_optimization_iterations': 1000, 'tolerance': 1E-10,
                       'memory_length': 10,
                       'hessian_inverse_init': 'Identity',
@@ -13,6 +13,8 @@ class LBFGSOptimizer:
                       'max_line_search_iterations': 50, 'is_strong_wolfe': False,
                       'is_line_search_check_differentiability': True, 'display_level': 1, 'is_stat_kept': True,
                       'is_debug_mode': False}
+
+    description = "L-BFGS Optimizer"
 
     def compute_search_direction(self, g):
 
@@ -83,30 +85,14 @@ class LBFGSOptimizer:
 
         return ls_flag, a, x_new, f_new, g_new, ls_num
 
-    def set_opt(self, option, print_change=False):
-        for (key, value) in option.items():
-            if print_change:
-                print('Option \'%s\' set from %r to %r' % (key, self.option[key], value))
-            self.option[key] = value
-
     def check_option(self):
         assert self.option['hessian_inverse_init'] in ('BB', 'Identity', 'Custom'), \
             'option for hessian_inverse_init can only be \'BB\', \'Identity\' or \'Custom\''
 
     def __init__(self, option=None):
 
-        self.option = self.default_option
-        if option is not None:
-            for (key, value) in option.items():
-                self.option[key] = value
+        super(LBFGSOptimizer, self).__init__(option=option)
 
-        # self.check_option()
-
-        self.stat = None
-        self.summary = None
-        self.obj_fun = None
-        self.dim = None
-        self.x_init = None
         self.sy_pairs = None
 
         self.flag = -2
@@ -134,28 +120,9 @@ class LBFGSOptimizer:
 
         """
 
-        self.stat = DataSet()  # self.stat will always be emptied
-        self.summary = None
+        super(LBFGSOptimizer, self).initialize(obj_fun=obj_fun, x_init=x_init, keep_last=keep_last)
 
         self.sy_pairs = deque()
-
-        if obj_fun is not None:  # a new obj_fun is provided, update; keep_last will be ignored!
-            self.obj_fun = obj_fun
-        elif self.obj_fun is not None:  # use last obj_func; no change
-            pass
-        else:  # do not have a valid obj_fun, error
-            raise ValueError('Objective function is not provided')
-
-        self.obj_fun.initialize_counter()  # initialize the counter for obj_fun
-
-        self.dim = self.obj_fun.input_dim
-
-        if x_init is not None:  # a new init point provided, update; keep_last will be ignored!
-            self.x_init = x_init
-        elif not keep_last or self.x_init is None:  # use initialization specified in option
-            self.x_init = self.option['x_init'](self.dim)
-        else:  # use last x_init; no change
-            pass
 
         self.flag = -1  # indicate that initialization is completed
 
@@ -164,17 +131,19 @@ class LBFGSOptimizer:
         if self.flag is not -1:
             return self.flag
 
-        iteration = 0
-
         self.flag = 0
 
         x_last = np.copy(self.x_init)
-        f_last = self.obj_fun(order=0, x=x_last)
-        g_last = self.obj_fun(order=1, x=x_last)
 
-        x = x_last
+        f_last = self.obj_fun(order=0, x=x_last)
+        self.f_init = f_last
+
+        g_last = self.obj_fun(order=1, x=x_last)
+        self.g_init = np.copy(g_last)
+
+        x = np.copy(x_last)
         f = f_last
-        g = g_last
+        g = np.copy(g_last)
 
         ########################
         #     Main Loop        #
@@ -182,7 +151,7 @@ class LBFGSOptimizer:
 
         while True:
 
-            if iteration > self.option['max_optimization_iterations']:
+            if self.iteration > self.option['max_optimization_iterations']:
                 self.flag = 1
                 break
 
@@ -195,7 +164,8 @@ class LBFGSOptimizer:
             ls_flag, a, x, f, g, ls_num = self.wolfe_line_search(x=x_last, f=f_last, g=g_last, p=p)
 
             if self.option['is_stat_kept']:
-                self.stat.log({"iter": iteration, "x": np.copy(x_last),
+                self.stat.log({"iter": self.iteration,
+                               "x": np.copy(x_last),
                                "f": f_last,
                                "g": np.copy(g_last),
                                "p": np.copy(p),
@@ -211,7 +181,7 @@ class LBFGSOptimizer:
             y = g - g_last
             rho = 1 / np.dot(s, y)
 
-            self.sy_pairs.append({'s': np.copy(s), 'y': np.copy(y), 'rho': rho})
+            self.sy_pairs.append({'s': copy.copy(s), 'y': copy.copy(y), 'rho': rho})
             if len(self.sy_pairs) > self.option['memory_length']:
                 self.sy_pairs.popleft()
 
@@ -219,14 +189,10 @@ class LBFGSOptimizer:
             f_last = f
             g_last = g
 
-            iteration += 1
+            self.iteration += 1
 
-        self.summary = {'total_iterations': iteration, 'status': self.flag, 'x_fin': x, 'f_fin': f, 'g_fin': np.copy(g)}
+        self.summary = {'total_iterations': self.iteration, 'status': self.flag,
+                        'x_init': np.copy(self.x_init), 'x_fin': np.copy(x), 'f_init': self.f_init,
+                        'f_fin': f, 'g_init': np.copy(self.g_init), 'g_fin': np.copy(g)}
 
         return self.flag
-
-    def __getitem__(self, item):
-        return self.stat[item]
-
-    def __call__(self, *args, **kwargs):
-        return self.stat(*args, **kwargs)

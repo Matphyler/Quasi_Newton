@@ -190,7 +190,7 @@ class DataSet:
         if container is None:
             self.container = list()
         else:
-            self.container = copy(container)
+            self.container = list(container)
 
     def log(self, entry):
         assert isinstance(self.container, list)
@@ -200,9 +200,9 @@ class DataSet:
     def __len__(self):
         return len(self.container)
 
-    def __call__(self, keys):
-        if isinstance(keys, str):
-            return [x[keys] for x in self.container]
+    def __call__(self, *args):
+
+        keys = list(args)
 
         if len(keys) == 1:
             return [x[keys[0]] for x in self.container]
@@ -217,24 +217,24 @@ class Optimizer:
 
     default_option = dict()
 
-    def set_opt(self, option, print_change=False):
-        for (key, value) in option.items():
-            if print_change:
-                print('Option \'%s\' set from %r to %r' % (key, self.option[key], value))
-            self.option[key] = value
+    description = "Optimizer"
 
-    def __init__(self, option=None):
+    def set_opt(self, **option):
+        self.option.update(option)
+
+    def __init__(self, **option):
 
         self.option = self.default_option
-        if option is not None:
-            for (key, value) in option.items():
-                self.option[key] = value
+        self.option.update(option)
 
         self.stat = DataSet()
         self.summary = None
         self.obj_fun = None
         self.dim = None
         self.x_init = None
+        self.f_init = None
+        self.g_init = None
+        self.iteration = 0
 
         self.flag = -2
         ##################################
@@ -256,7 +256,7 @@ class Optimizer:
             (2) self.obj_fun: if provided, will ALWAYS update; if not provided, will try to use the last obj_fun;
             if the last obj_fun is not defined, will raise an error. The obj_func's counter will be initialized.
 
-            (3) self.x_init and self.h_init: if provided, will ALWAYS update; if not provided: if keep_last is True,
+            (3) self.x_init: if provided, will ALWAYS update; if not provided: if keep_last is True,
             then the last one will be used; otherwise will initialize as specified in option.
 
         """
@@ -276,16 +276,20 @@ class Optimizer:
         self.dim = self.obj_fun.input_dim
 
         if x_init is not None:  # a new init point provided, update; keep_last will be ignored!
-            self.x_init = x_init
+            self.x_init = np.asarray(x_init)
         elif not keep_last or self.x_init is None:  # use initialization specified in option
             self.x_init = self.option['x_init'](self.dim)
         else:  # use last x_init; no change
             pass
+
+        self.f_init = None
+        self.g_init = None
+        self.iteration = 0
 
         self.flag = -1  # indicate that initialization is completed
 
     def __getitem__(self, item):
         return self.stat[item]
 
-    def __call__(self, *args, **kwargs):
-        return self.stat(*args, **kwargs)
+    def __call__(self, *args):
+        return self.stat(*args)
